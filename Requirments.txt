@@ -1,1 +1,15 @@
-
+fer2013.csv file - https://www.kaggle.com/datasets/msambare/fer2013
+Python 3.8 Interpreter
+Python Library :
+  Tensorflow
+  Deepface
+  Opencv-python
+  os
+  sklearn
+  tkinter
+  numpy
+  pandas
+  keras
+Convert Python file into Executable file
+  auto-py-to-exe
+  pyinstaller
