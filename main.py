@@ -1,156 +1,123 @@
-import pandas as pd
-import numpy as np
-import cv2
 import tkinter as tk
-from tkinter import *
+from PIL import Image, ImageTk
+import cv2
+import numpy as np
+import pandas as pd
+import tensorflow as tf
 import matplotlib.pyplot as plt
-from keras.models import Sequential
-from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
-from sklearn.model_selection import train_test_split
+
 # Load FER2013 dataset
-df = pd.read_csv('fer2013.csv')
-# For UI Control
-root =Tk()
-root.title('Main Panel')
-root.geometry("400x300")
-# root.minsize(300, 200)
-# root.maxsize(800, 600)
-# Extract pixels and labels
-pixels = df['pixels'].values
-labels = pd.get_dummies(df['emotion']).values
+data = pd.read_csv('fer2013.csv')
 
-# Convert pixels to images
-images = np.array([np.fromstring(pixel, dtype=int, sep=' ').reshape((48, 48)) for pixel in pixels])
+# Split the data into training and testing sets
+# (Assuming you have already done this during model training)
 
-# Normalize pixel values
-images = images / 255.0
+# Load pre-trained emotion detection model
+model = tf.keras.models.load_model('D:\Team-7 Project\Project Demo\emotion_detection_model.h5')
 
-# Split dataset into training and testing sets
-train_images, test_images, train_labels, test_labels = train_test_split(images, labels, test_size=0.2, random_state=42)
+# Map emotion labels to corresponding integers
+emotion_labels = {0: 'Angry', 1: 'Disgust', 2: 'Fear', 3: 'Happy',
+                  4: 'Sad', 5: 'Surprise', 6: 'Neutral'}
 
-# Define the CNN model
-model = Sequential([
-    Conv2D(64, (3, 3), activation='relu', input_shape=(48, 48, 1)),
-    MaxPooling2D(2, 2),
-    Conv2D(128, (3, 3), activation='relu'),
-    MaxPooling2D(2, 2),
-    Conv2D(256, (3, 3), activation='relu'),
-    MaxPooling2D(2, 2),
-    Flatten(),
-    Dense(512, activation='relu'),
-    Dropout(0.5),
-    Dense(7, activation='softmax')
-])
+# Create Tkinter GUI
+class FacialEmotionDetectionApp:
+    def __init__(self, master):
+        self.master = master
+        self.video_source = 0  # Set video source to default webcam
+        self.vid = cv2.VideoCapture(self.video_source)
 
-# Compile the model
-model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+        self.canvas = tk.Canvas(master, width=self.vid.get(cv2.CAP_PROP_FRAME_WIDTH),
+                                height=self.vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.canvas.pack()
 
-# Reshape train and test images for CNN input
-train_images = train_images.reshape(train_images.shape[0], 48, 48, 1)
-test_images = test_images.reshape(test_images.shape[0], 48, 48, 1)
+        self.start_button = tk.Button(master, text="Start", command=self.start)
+        self.start_button.pack(side=tk.LEFT)
 
-# Train the model
-model.fit(train_images, train_labels, epochs=1, batch_size=64, validation_data=(test_images, test_labels))
+        self.stop_button = tk.Button(master, text="Stop", command=self.stop)
+        self.stop_button.pack(side=tk.LEFT)
 
-# Load pre-trained face detection classifier
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        self.detecting_label = tk.Label(master, text="")
+        self.detecting_label.pack()
 
-# Open system camera
-cap = cv2.VideoCapture(0)
+        self.emotion_label = tk.Label(master, text="")
+        self.emotion_label.pack()
 
+        self.is_detecting = False
+        self.delay = 15
+        self.emotion_report = None  # Store emotion report
+        self.update()
 
+    def start(self):
+        self.is_detecting = True
+        self.emotion_report = {'Angry': 0, 'Disgust': 0, 'Fear': 0, 'Happy': 0,
+                               'Sad': 0, 'Surprise': 0, 'Neutral': 0}
+        self.detecting_label.config(text="Detecting")
 
-# Define emotion labels
-emotion_labels = ['Angry', 'Fear', 'Happy', 'Sad', 'Surprise', 'Neutral']
+    def stop(self):
+        self.is_detecting = False
+        self.detecting_label.config(text="Not Detecting")
+        self.generate_report()
 
-# Initialize variables for emotion ratio
-emotion_counts = [0] * len(emotion_labels)
+    def update(self):
+        ret, frame = self.vid.read()
 
-# Create matplotlib figure and axes for emotion ratio chart
+        if ret:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-fig, ax = plt.subplots()
-plt.title('Ratio Window')
-ax.set_xlabel('Face Reaction Display Panel')
-bar_chart = ax.bar(emotion_labels, emotion_counts)
+            # Detect faces in the frame
+            face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+            face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+            if face_cascade.empty():
+                print("Error: Unable to load the cascade classifier.")
+                return
 
-# Function to update emotion ratio chart
-def update_chart():
-    for i, bar in enumerate(bar_chart):
-        bar.set_height(emotion_counts[i])
-    plt.draw()
+            gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+            faces = face_cascade.detectMultiScale(gray, 1.1, 4)
 
-# Function to start emotion detection
-def start_detection():
-    global emotion_counts
-    while True:
-        ret, frame = cap.read()
+            detected_emotion = None
 
-        if not ret:
-            break
+            # Draw rectangles around the faces and display detected emotion
+            for (x, y, w, h) in faces:
+                cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
+                face_roi = gray[y:y+h, x:x+w]
 
-        # Convert frame to grayscale
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                # Resize face for model input
+                face_roi = cv2.resize(face_roi, (48, 48))
+                face_roi = np.expand_dims(face_roi, axis=0)
+                face_roi = np.expand_dims(face_roi, axis=-1)
 
+                # Perform emotion detection inference
+                predictions = model.predict(face_roi)
+                emotion_prediction = np.argmax(predictions)
 
-        # Detect faces in the frame
-        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                detected_emotion = emotion_labels[emotion_prediction]
 
-        for (x, y, w, h) in faces:
-            # Extract face region and preprocess
-            face_roi = gray[y:y + h, x:x + w]
-            face_roi = cv2.resize(face_roi, (48, 48))
-            face_roi = face_roi / 255.0
-            face_roi = np.expand_dims(face_roi, axis=0)
-            face_roi = np.expand_dims(face_roi, axis=-1)
+                if self.is_detecting:  # Update report only if detecting
+                    self.emotion_report[detected_emotion] += 1
 
-            # Predict emotion
-            prediction = model.predict(face_roi)[0]
-            max_index = np.argmax(prediction)
-            emotion_label = emotion_labels[max_index]
+                # Display detected emotion on the frame
+                cv2.putText(frame, detected_emotion, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
 
+            # Display the video feed
+            self.photo = ImageTk.PhotoImage(image=Image.fromarray(frame))
+            self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
 
-            # Check if the list is empty
-            if not emotion_labels:
-                print("Emotion labels list is empty.")
-            else:
-                # Check if max_index is within the range of the list
-                if 0 <= max_index < len(emotion_labels):
-                    emotion_label = emotion_labels[max_index]
-                    # Further code using emotion_label
-                else:
-                    print("Invalid max_index value:", max_index)
+        self.master.after(self.delay, self.update)
 
-            # Update emotion counts
-            emotion_counts[max_index] += 1
+    def generate_report(self):
+        if self.emotion_report is not None:
+            plt.figure(figsize=(8, 6))
+            emotions, counts = zip(*self.emotion_report.items())
+            plt.bar(emotions, counts, color='skyblue')
+            plt.xlabel('Emotion')
+            plt.ylabel('Count')
+            plt.title('Emotion Distribution')
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            plt.show()
 
-            # Draw rectangle around the face and label the emotion
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 100), 2)
-            cv2.putText(frame, emotion_label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (0, 0, 255), 3)
-
-        # Update the emotion ratio chart
-        update_chart()
-
-        # Display the frame
-        cv2.imshow('Team 7', frame)
-
-        # Exit if 'e' is pressed
-        if cv2.waitKey(1) & 0xFF == ord('e'):
-            break
-
-    # Release the camera and close OpenCV windows
-    cap.release()
-    cv2.destroyAllWindows()
-
-# Function to stop emotion detection
-def stop_detection():
-    root.quit()
-
-# Start and stop buttons
-start_button = tk.Button(root, text="Start", command=start_detection,width=10, height=2)
-start_button.pack(expand=True, padx=10, pady=10, anchor=tk.CENTER)
-# button = tk.Button(frame, text="Click Me", )
-# button.pack(expand=True, padx=10, pady=10, anchor=tk.CENTER)
-stop_button = tk.Button(root, text="Stop", command=stop_detection,width=10, height=2)
-stop_button.pack(expand=True, padx=10, pady=10, anchor=tk.CENTER)
-# Display the emotion ratio chart
-plt.show()
+# Create the GUI window
+root = tk.Tk()
+root.title('Affective Computing - Emotion AI')
+app = FacialEmotionDetectionApp(root)
+root.mainloop()
