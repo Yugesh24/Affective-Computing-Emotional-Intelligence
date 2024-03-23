@@ -22,6 +22,7 @@ emotion_labels = {0: 'Angry', 1: 'Disgust', 2: 'Fear', 3: 'Happy',
 # Create Tkinter GUI
 class FacialEmotionDetectionApp:
     def __init__(self, master):
+        self.photo = None
         self.master = master
         self.video_source = 0  # Set video source to default webcam
         self.vid = cv2.VideoCapture(self.video_source)
@@ -30,11 +31,11 @@ class FacialEmotionDetectionApp:
                                 height=self.vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.canvas.pack()
 
-        self.start_button = tk.Button(master, text="Start", command=self.start)
-        self.start_button.pack(side=tk.LEFT)
+        self.start_button = tk.Button(master, text="Start", command=self.start,width=10, height=2, bg="green",font=14)
+        self.start_button.pack(side=tk.LEFT, expand=True, padx=10, pady=10, anchor=tk.CENTER)
 
-        self.stop_button = tk.Button(master, text="Stop", command=self.stop)
-        self.stop_button.pack(side=tk.LEFT)
+        self.stop_button = tk.Button(master, text="Stop", command=self.stop,width=10, height=2, bg="red",font=14)
+        self.stop_button.pack(side=tk.LEFT, expand=True, padx=10, pady=10, anchor=tk.CENTER)
 
         self.detecting_label = tk.Label(master, text="")
         self.detecting_label.pack()
@@ -51,11 +52,18 @@ class FacialEmotionDetectionApp:
         self.is_detecting = True
         self.emotion_report = {'Angry': 0, 'Disgust': 0, 'Fear': 0, 'Happy': 0,
                                'Sad': 0, 'Surprise': 0, 'Neutral': 0}
+
         self.detecting_label.config(text="Detecting")
+        self.detecting_label.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+        self.emotion_label.place(relx=0.5, rely=0.55, anchor=tk.CENTER)
+
 
     def stop(self):
         self.is_detecting = False
         self.detecting_label.config(text="Not Detecting")
+        self.detecting_label.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+        self.emotion_label.place(relx=0.5, rely=0.55, anchor=tk.CENTER)
+
         self.generate_report()
 
     def update(self):
@@ -66,15 +74,8 @@ class FacialEmotionDetectionApp:
 
             # Detect faces in the frame
             face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-            face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-            if face_cascade.empty():
-                print("Error: Unable to load the cascade classifier.")
-                return
-
             gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
             faces = face_cascade.detectMultiScale(gray, 1.1, 4)
-
-            detected_emotion = None
 
             # Draw rectangles around the faces and display detected emotion
             for (x, y, w, h) in faces:
@@ -96,7 +97,7 @@ class FacialEmotionDetectionApp:
                     self.emotion_report[detected_emotion] += 1
 
                 # Display detected emotion on the frame
-                cv2.putText(frame, detected_emotion, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
+                cv2.putText(frame, detected_emotion, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (50,255,35), 2)
 
             # Display the video feed
             self.photo = ImageTk.PhotoImage(image=Image.fromarray(frame))
@@ -106,9 +107,13 @@ class FacialEmotionDetectionApp:
 
     def generate_report(self):
         if self.emotion_report is not None:
-            plt.figure(figsize=(8, 6))
             emotions, counts = zip(*self.emotion_report.items())
-            plt.bar(emotions, counts, color='skyblue')
+
+            # Define colors for each emotion
+            colors = ['red', 'green', 'blue', 'orange', 'purple', 'yellow', 'gray']
+
+            plt.figure(figsize=(8, 6))
+            plt.bar(emotions, counts, color=colors)
             plt.xlabel('Emotion')
             plt.ylabel('Count')
             plt.title('Emotion Distribution')
