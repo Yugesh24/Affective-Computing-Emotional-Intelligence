@@ -109,8 +109,19 @@ class FacialEmotionDetectionApp:
         if self.emotion_report is not None:
             emotions, counts = zip(*self.emotion_report.items())
 
-            # Define colors for each emotion
-            colors = ['red', 'green', 'blue', 'orange', 'purple', 'yellow', 'gray']
+             # Define colors for each emotion
+            emotion_colors = {
+                    'Happy': 'green',
+                    'Angry': 'red',
+                    'Fear': 'violet',
+                    'Surprise': 'orange',
+                    'Sad': 'black',
+                    'Neutral': 'blue',
+                    'Disgust': 'yellow'
+                }
+
+            # Create a list of colors corresponding to each emotion
+            colors = [emotion_colors[emotion] for emotion in emotions]
 
             plt.figure(figsize=(8, 6))
             plt.bar(emotions, counts, color=colors)
